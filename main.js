@@ -366,7 +366,7 @@ function startListening() {
   recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = "en-US";
+  recognition.lang = "en-UK";
   recognition.onresult = async (event) => {
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript
@@ -1027,3 +1027,4 @@ async function askDelta(text) {
     processingCommand = false;
   }
 }
+
