@@ -161,7 +161,6 @@ function loadVoices() {
   VOICE =
     voices.find(v => v.name === TARGET_VOICE_NAME) ||
     voices.find(v => v.name.includes("Mark")) ||
-    voices.find(v => v.lang.includes("UK")) ||
     voices.find(v => v.name.includes("Google US English")) ||
     voices.find(v => v.name.includes("David")) ||
     voices.find(v => v.lang.startsWith("en"));
@@ -377,7 +376,6 @@ function startListening() {
       if (event.results[i].isFinal) {
         console.log("User said:", transcript);
         if (listenMode === "command") {
-            if (!processingCommand) processingCommand = true;
             (async () => {
               try {
                 await askDelta(transcript);
@@ -1004,6 +1002,7 @@ speakMoveBtn.onclick = () => {
 }
 
 async function askDelta(text) {
+  if (processingCommand) return;
   processingCommand = true;
   try {
     document.getElementById("userText").innerText =
