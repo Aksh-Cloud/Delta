@@ -5,26 +5,128 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
-  }
+}
 
-  #eyes {
+#eyes {
     background: #0a0f1a;
     border-radius: 30px;
     height: 100%;
     width: 100%;
-  }
-  /* Container that holds the eyes and the text below them */
-  #deltaContainer {
+}
+
+/* Container that holds the eyes and the text below them */
+#deltaContainer {
     display: flex;
     flex-direction: column;
     align-items: center;
     margin-top: 10%;
     height: 100%;
     width: 100%;
-  }
+    justify-content: center;
+    align-items: center;
+}
 
-  /* Invisible overlay for double-click refresh */
-  #refresh {
+/* Diff section styling */
+.diff {
+    position: absolute;
+    top: 15%;
+    right: 20%;
+    background: rgba(0, 72, 255, 0.252);
+    padding: 10px;
+    backdrop-filter: blur(10px);
+    height: 70%;
+    width: 60%;
+    border-radius: 2%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-self: center;
+    justify-self: center;
+    z-index: 10;
+}
+
+.diff span {
+    color: #fff;
+    font-family: monospace;
+    margin-bottom: 5%;
+    margin-top: 10px;
+    font-size: 30px;
+}
+
+.diff button {
+    padding: 5px 10px;
+    border: none;
+    margin-top: 0px;
+    height: 70%;
+    width: 60%;
+    font-size: 70px;
+    border-radius: 10px;
+    background: #000717d1;
+    color: #fff;
+    cursor: pointer;
+}
+
+/* Move panel (voice move input) */
+.movePannel {
+    position: absolute;
+    bottom: 18%;
+    left: 50%;
+    height: 70%;
+    width: 60%;
+    transform: translateX(-50%);
+    background: rgba(0, 72, 255, 0.22);
+    padding: 12px 18px;
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    z-index: 12;
+    min-width: 300px;
+    max-width: 80%;
+}
+
+.movePannel button {
+    padding: 8px 14px;
+    font-size: 18px;
+    height: auto;
+    width: auto;
+    border-radius: 8px;
+    background: #001022cc;
+}
+
+.movePannel span {
+    color: #fff;
+    font-family: monospace;
+    font-size: 16px;
+}
+
+.moveText {
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.engine {
+    color: rgb(90, 255, 84);
+}
+
+.illegal {
+    color: rgb(255, 90, 90);
+}
+
+h2 {
+    color: #fff;
+    font-family: monospace;
+    margin-bottom: 20px;
+}
+
+.user {
+    color: rgb(90, 90, 255);
+}
+
+/* Invisible overlay for double-click refresh */
+#refresh {
     position: absolute;
     top: 5%;
     left: 0;
@@ -33,11 +135,10 @@ body {
     height: 20%;
     cursor: pointer;
     z-index: 10;
-  }
+}
 
-
-  /* Text boxes that appear below the canvas */
-  #deltaRes, #userText {
+/* Text boxes that appear below the canvas */
+#deltaRes, #userText {
     color: #fff;
     font-family: monospace;
     background: rgba(0,0,0,0.5);
@@ -48,37 +149,90 @@ body {
     display: block;
     text-align: center;
     word-break: break-word;
-  }
-  .listening {
+}
+
+.listening {
     box-shadow: 0 0 10px 2px rgb(0, 255, 255);
     animation: listeningGlow 2s infinite;
-  }
-  #sleep {
+}
+
+.movePannel {
+    position: absolute;
+    top: 5%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 72, 255, 0.252);
+    padding: 10px;
+    backdrop-filter: blur(10px);
+    height: 20%;
+    width: 60%;
+    border-radius: 2%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    justify-self: center;
+    z-index: 10;
+    font-size: 20px;
+    height: 60%;
+    width: 60%;
+}
+
+#moveText {
+    color: #fff;
+    font-family: monospace;
+    margin-top: 10px;
+}
+
+#moveTextBig {
+    font-size: 40px;
+}
+
+#speakM {
+    padding: 5px 10px;
+    border: none;
+    margin-top: 0px;
+    height: 50%;
+    width: 60%;
+    font-size: 30px;
+    border-radius: 10px;
+    background: #000717d1;
+    color: #fff;
+    cursor: pointer;
+}
+
+#sleep {
     position: absolute;
     bottom: 10%;
     width: 100%;
     height: 20%;
     cursor: pointer;
     z-index: 10;
-  }
-  @keyframes listeningGlow {
+}
+
+@keyframes listeningGlow {
     0% {
-      box-shadow: 0 0 5px 1px rgb(0, 255, 255);
+        box-shadow: 0 0 5px 1px rgb(0, 255, 255);
     }
+
     50% {
-      box-shadow: 0 0 10px 3px rgb(0, 255, 255);
+        box-shadow: 0 0 10px 3px rgb(0, 255, 255);
     }
+
     100% {
-      box-shadow: 0 0 5px 1px rgb(0, 255, 255);
+        box-shadow: 0 0 5px 1px rgb(0, 255, 255);
     }
-  }
-  @media screen and (min-width: 480px) {
+}
+
+@media screen and (min-width: 480px) {
     #deltaRes, #userText {
-      max-width: 90vw;
-      font-size: 14px;
+        max-width: 90vw;
+        font-size: 14px;
     }
+
     #eyes {
-      width: 85%;
-      height: auto;
+        width: 85%;
+        height: auto;
     }
-  }
+}
