@@ -7,6 +7,7 @@ const ctx = canvas.getContext("2d");
 /* =====================
    STATE
 ===================== */
+let aiBusy = false;
 let blinkValue = 1;
 let blinkTarget = 1;
 let blinkTimer = 0;
@@ -389,6 +390,7 @@ function startListening() {
             })();
             recognition.stop();
             listeningForWake = false;
+            recognition.onresult = null;
         }
       }
     }
@@ -399,11 +401,11 @@ function startListening() {
   };
 
   recognition.onend = () => {
-    // auto-restart (important)
+    if (aiBusy) return;
     try {
       if (listeningForWake) recognition.start();
     } catch (err) {
-      console.log("SS");
+      console.log("Error restarting recognition: ", err);
     }
   };
 
@@ -425,6 +427,7 @@ function stopCharging() {
   chargePhase = 0;
 }
 function startWakeWordListening() {
+  if (listeningForWake) return;
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -773,6 +776,7 @@ async function chatWithDelta(userText) {
   return await sendRequest(userText, modelUrl);
 }
 async function sendRequest(userText, model) {
+  console.count("Supabase call");
   try {
     const { data, error } = await supabase.functions.invoke(model, {
       body: { message: userText }
@@ -1004,6 +1008,9 @@ speakMoveBtn.onclick = () => {
 }
 
 async function askDelta(text) {
+  if (aiBusy) return;
+  aiBusy = true;
+  if (processingCommand) return;
   processingCommand = true;
   try {
     document.getElementById("userText").innerText =
@@ -1026,5 +1033,6 @@ async function askDelta(text) {
     canvas.classList.remove("listening");
   } finally {
     processingCommand = false;
+    aiBusy = false;
   }
 }
