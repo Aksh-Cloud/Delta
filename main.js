@@ -389,7 +389,6 @@ function startListening() {
             })();
             recognition.stop();
             listeningForWake = false;
-            recognition.onresult = null;
         }
       }
     }
@@ -426,7 +425,6 @@ function stopCharging() {
   chargePhase = 0;
 }
 function startWakeWordListening() {
-  if (listeningForWake) return;
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
