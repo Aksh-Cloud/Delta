@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delta</title>
-    <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#19f2f2">
     <style>
         :root {
             --neon-pink: #00c8ff;
@@ -117,18 +115,10 @@
             input.focus();
         }
     });
-
-        if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/service-worker.js")
-      .then(() => console.log("Service Worker Registered"))
-      .catch((err) => console.error("SW failed:", err));
-  });
-}
     </script>
 
 </body>
 
 </html>
+
 
