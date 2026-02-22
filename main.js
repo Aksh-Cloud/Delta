@@ -7,7 +7,6 @@ const ctx = canvas.getContext("2d");
 /* =====================
    STATE
 ===================== */
-let aiBusy = false;
 let blinkValue = 1;
 let blinkTarget = 1;
 let blinkTimer = 0;
@@ -401,11 +400,11 @@ function startListening() {
   };
 
   recognition.onend = () => {
-    if (aiBusy) return;
+    // auto-restart (important)
     try {
       if (listeningForWake) recognition.start();
     } catch (err) {
-      console.log("Error restarting recognition: ", err);
+      console.log("SS");
     }
   };
 
@@ -776,7 +775,6 @@ async function chatWithDelta(userText) {
   return await sendRequest(userText, modelUrl);
 }
 async function sendRequest(userText, model) {
-  console.count("Supabase call");
   try {
     const { data, error } = await supabase.functions.invoke(model, {
       body: { message: userText }
@@ -1008,8 +1006,6 @@ speakMoveBtn.onclick = () => {
 }
 
 async function askDelta(text) {
-  if (aiBusy) return;
-  aiBusy = true;
   if (processingCommand) return;
   processingCommand = true;
   try {
@@ -1033,6 +1029,5 @@ async function askDelta(text) {
     canvas.classList.remove("listening");
   } finally {
     processingCommand = false;
-    aiBusy = false;
   }
 }
