@@ -1006,7 +1006,6 @@ speakMoveBtn.onclick = () => {
 }
 
 async function askDelta(text) {
-  if (processingCommand) return;
   processingCommand = true;
   try {
     document.getElementById("userText").innerText =
