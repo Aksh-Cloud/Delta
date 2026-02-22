@@ -1,4 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/esm/chess.js";
+
 const canvas = document.getElementById("eyes");
 const ctx = canvas.getContext("2d");
 //setupHiResCanvas(canvas, ctx);
@@ -12,7 +14,7 @@ let nextBlink = randomBlinkTime();
 const SUPABASE_URL = "https://uamazwssxpdzwexvlvzf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_oYKeoDzCAN2deb-3pbBQZg_wYie4nB6";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+let playerSide = null;
 let lookX = 0;
 let listenMode = "wake"; // "wake" | "command"
 let lookY = 0;
@@ -36,6 +38,14 @@ let isSpeaking = false;
 let utterance = null;
 let silenceTimer = null;
 let lastHeardTime = Date.now();
+let processingCommand = false; // prevent duplicate command handling
+let preferredVoiceName = null;
+const TARGET_VOICE_NAME = "Microsoft Mark - English";
+
+const logSpan = document.getElementById("moveText");
+const speakMoveBtn = document.getElementById("speakM");
+const game = new Chess();
+
 
 const SILENCE_DELAY = 12000; // 12 seconds
 
@@ -66,17 +76,102 @@ let bootProgress = 0;
 
 let VOICE = null;
 
+/* ============================= */
+/* DELTA ENGINE CLASS            */
+/* ============================= */
+
+class DeltaEngine {
+    constructor() {
+        this.worker = new Worker("deltaengine.js");
+        this.moves = [];
+
+        this.worker.postMessage("uci");
+
+        this.worker.onmessage = (event) => {
+            if (event.data.startsWith("bestmove")) {
+                const move = event.data.split(" ")[1];
+                if (move && move !== "(none)") {
+                    this.moves.push(move);
+                    this.onEngineMove(move);
+                }
+            }
+        };
+    }
+
+    play(move) {
+        if (move) this.moves.push(move);
+
+        this.worker.postMessage(
+            "position startpos moves " + this.moves.join(" ")
+        );
+
+        // FAST but strong
+        this.worker.postMessage("go movetime 500");
+    }
+
+    onEngineMove(move) {}
+}
+const engine = new DeltaEngine();
+
+function listenForC(callback) {
+    const recognition =
+        new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+
+    recognition.lang = "en-US";
+    recognition.start();
+
+    recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript.toLowerCase();
+        callback(text);
+    };
+}
+
+// Lightweight listen helper for single-shot speech (used for move input)
+function listen(callback) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.warn('Speech Recognition not supported');
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript.toLowerCase();
+    try { callback(text); } catch (err) { console.error(err); }
+    recognition.stop();
+  };
+
+  recognition.onerror = (e) => {
+    console.warn('Speech error:', e.error);
+    recognition.stop();
+  };
+
+  recognition.start();
+}
+
 function loadVoices() {
   const voices = speechSynthesis.getVoices();
   if (!voices.length) return;
 
+  // Prefer explicit target voice when available, otherwise fall back to sensible defaults
   VOICE =
+    voices.find(v => v.name === TARGET_VOICE_NAME) ||
     voices.find(v => v.name.includes("Mark")) ||
+    voices.find(v => v.lang.includes("UK")) ||
     voices.find(v => v.name.includes("Google US English")) ||
     voices.find(v => v.name.includes("David")) ||
     voices.find(v => v.lang.startsWith("en"));
 
-  console.log("Locked voice:", VOICE?.name);
+  if (VOICE) {
+    preferredVoiceName = VOICE.name;
+    console.log("Locked voice:", VOICE.name);
+  } else {
+    console.log("Preferred voice not found. Available voices:", voices.map(v => v.name));
+  }
 }
 
 // Chrome / Edge fix
@@ -171,8 +266,21 @@ function runSpeakQueue() {
       return;
     }
 
+    // Ensure preferred voice is selected (helps on mobile where voices may arrive late)
+    if (!VOICE) {
+      const voices = speechSynthesis.getVoices();
+      if (voices && voices.length) {
+        if (preferredVoiceName) {
+          VOICE = voices.find(v => v.name === preferredVoiceName) || voices.find(v => v.lang.startsWith('en'));
+        } else {
+          VOICE = voices.find(v => v.name.includes("Mark")) || voices.find(v => v.name.includes("Google US English")) || voices.find(v => v.lang.startsWith("en"));
+          if (VOICE) preferredVoiceName = VOICE.name;
+        }
+      }
+    }
+
     const utterance = new SpeechSynthesisUtterance(item.chunks[i++]);
-    utterance.voice = VOICE;
+    if (VOICE) utterance.voice = VOICE;
 
     // 👦 Boy-ish tuning
     utterance.rate = 1.05;
@@ -260,7 +368,7 @@ function startListening() {
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = "en-US";
-  recognition.onresult = event => {
+  recognition.onresult = async (event) => {
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript
         .toLowerCase()
@@ -269,7 +377,16 @@ function startListening() {
       if (event.results[i].isFinal) {
         console.log("User said:", transcript);
         if (listenMode === "command") {
-            askDelta(transcript);
+            if (!processingCommand) processingCommand = true;
+            (async () => {
+              try {
+                await askDelta(transcript);
+              } catch (err) {
+                console.error(err);
+              } finally {
+                processingCommand = false;
+              }
+            })();
             recognition.stop();
             listeningForWake = false;
         }
@@ -322,7 +439,7 @@ function startWakeWordListening() {
   recognition.interimResults = true;
   recognition.lang = "en-US";
 
-  recognition.onresult = event => {
+  recognition.onresult = async (event) => {
     // If we're already handling a wake -> command transition, ignore further results
     if (listenMode !== "wake") return;
 
@@ -334,14 +451,18 @@ function startWakeWordListening() {
       if (transcript.includes(WAKE_WORD)) {
         console.log("Wake word detected:", transcript);
 
+        if (processingCommand) return; // already processing a command
+        processingCommand = true;
+
         if (sleeping) if(!isSpeaking) wakeFromSleep();
         // mark mode immediately to prevent duplicate handling from interim/final results
         listenMode = "command";
-        speak("Yes?");
+        await speak("Yes?");
         recognition.stop();
         canvas.classList.add("listening");
         wakeWord();
         startListening();
+        // do not clear processingCommand here — it will be cleared when askDelta completes
         break;
       }
     }
@@ -356,7 +477,13 @@ function startWakeWordListening() {
   recognition.start();
   listeningForWake = true;
 }
-document.addEventListener("click", () => {
+document.addEventListener("click", (e) => {
+  // Ignore clicks on UI elements that intentionally start speech (class "speak")
+  // so pressing the Speak buttons doesn't also start wake-word recognition.
+  try {
+    if (e.target && e.target.closest && e.target.closest('.speak')) return;
+  } catch (err) {}
+
   if (!listeningForWake) {
     startWakeWordListening();
     console.log("Wake-word listening started");
@@ -713,19 +840,191 @@ async function checkEmotion(userText) {
   }
 }
 
+/* ============================= */
+/* GAME STATE CHECK              */
+/* ============================= */
+
+function checkGameOver() {
+
+    if (game.isCheckmate()) {
+        addLog("Checkmate!", "engine");
+        speak("Checkmate. Game over.");
+        return true;
+    }
+
+    if (game.isStalemate()) {
+        addLog("Stalemate.", "engine");
+        speak("Stalemate.");
+        return true;
+    }
+
+    if (game.isCheck()) {
+        speak("Check.");
+    }
+
+    return false;
+}
+
+function addLog(text, type) {
+  logSpan.innerText = text;
+  logSpan.className = type
+}
+
+
+engine.onEngineMove = (move) => {
+
+    game.move({
+        from: move.substring(0, 2),
+        to: move.substring(2, 4),
+        promotion: "q"
+    });
+
+    addLog("DeltaEngine: " + move, "engine");
+
+    speak("My move is " + move.split("").join(" "));
+
+    checkGameOver();
+};
+
+async function ChessMode() {
+  const sp = [
+    "Let's battle ... in Chess",
+    "Sure, Let's Play Chess!"
+  ];
+  const openN = (sp) => sp[Math.floor(Math.random() * sp.length)];
+  document.getElementById("deltaRes").innerText =
+    "DELTA: " + openN(sp);
+  await speak(openN(sp));
+
+  document.getElementById("deltaRes").innerText =
+    "DELTA: By the way, how good are you at the game?";
+  await speak("By the way, how good are you at the game?");
+
+  // enter chess mode: stop wake-word listening so it doesn't interfere
+  if (listeningForWake && recognition) {
+    try { recognition.stop(); } catch (e) {}
+    listeningForWake = false;
+  }
+  listenMode = "command";
+
+  document.getElementById("diff").style.display = "flex";
+  let response = "";
+
+  document.getElementById("speakD").onclick = async () => {
+    listenForC(async (text) => {
+      const skill = toLowerCaseAndTrim(text);
+      let respLocal = "Really? me too Let's Begin!";
+      document.getElementById("deltaRes").innerText =
+        "DELTA: " + respLocal;
+      await speak(respLocal);
+      document.getElementById("diff").style.display = "none";
+
+      // After acknowledging skill, prompt for side and show color panel
+      response = "Which side do you want to play? white or black?";
+      document.getElementById("deltaRes").innerText =
+        "DELTA: " + response;
+      document.getElementById("color").style.display = "flex";
+      await speak(response);
+    });
+  }
+
+  document.getElementById("speakC").onclick = async () => {
+    listenForC(async (text) => {
+      const side = toLowerCaseAndTrim(text);
+      if (side.includes("white")) {
+        playerSide = "white";
+        response = "Great! You will play white and I will play black. Your move!";
+      }
+      if (side.includes("black")) {
+        playerSide = "black";
+        response = "Great! You will play black and I will play white. Your move!";
+        // If player chooses black, engine (white) should move first
+        try { engine.play(); } catch (err) { console.error('Engine play error:', err); }
+      }
+      // show move panel now that side is chosen
+      document.getElementById("movePannel").style.display = "flex";
+      document.getElementById("deltaRes").innerText =
+        "DELTA: " + response;
+      await speak(response);
+      document.getElementById("color").style.display = "none";
+    });};
+  
+speakMoveBtn.onclick = () => {
+
+
+    listen((spoken) => {
+
+        const cleaned = spoken.replace(/\s/g, "").toLowerCase();
+
+        /* ---------- 1️⃣ FORMAT CHECK ---------- */
+
+        const formatRegex = /^[a-h][1-8][a-h][1-8]$/;
+
+        if (!formatRegex.test(cleaned)) {
+            addLog("Invalid format: " + spoken, "illegal");
+            speak("Invalid format. Say move like e two e four.");
+            return;
+        }
+
+        /* ---------- 2️⃣ LEGALITY CHECK ---------- */
+
+        const from = cleaned.substring(0, 2);
+        const to = cleaned.substring(2, 4);
+
+        const legalMoves = game.moves({ verbose: true });
+
+        const isLegal = legalMoves.some(
+            m => m.from === from && m.to === to
+        );
+
+        if (!isLegal) {
+            addLog("Illegal move: " + cleaned, "illegal");
+            speak("That move is illegal.");
+            return;
+        }
+
+        /* ---------- 3️⃣ EXECUTE PLAYER MOVE ---------- */
+
+        game.move({
+            from: from,
+            to: to,
+            promotion: "q"
+        });
+
+        addLog("You: " + cleaned, "user");
+
+        if (checkGameOver()) return;
+        
+
+        engine.play(cleaned);
+    });
+};
+
+
+}
+
 async function askDelta(text) {
-  document.getElementById("userText").innerText =
-    "USER: " + sanitizeDisplay(text);
+  processingCommand = true;
+  try {
+    document.getElementById("userText").innerText =
+      "USER: " + sanitizeDisplay(text);
 
-  await checkEmotion(text);
+    if (text.toLowerCase().includes("lets have a quick match of chess") || text.toLowerCase().includes("play chess") || text.toLowerCase().includes("let's play chess")) {
+      ChessMode();
+      return;
+    }
+    await checkEmotion(text);
 
-  const reply = await chatWithDelta(text);
-  if (!reply) return;
+    const reply = await chatWithDelta(text);
+    if (!reply) return;
 
-  await speak(sanitizeSpeech(reply));
+    await speak(sanitizeSpeech(reply));
 
-  // 🔁 return to wake-word listening
-  listenMode = "wake";
-  startWakeWordListening();
-  canvas.classList.remove("listening");
+    // 🔁 return to wake-word listening
+    listenMode = "wake";
+    startWakeWordListening();
+    canvas.classList.remove("listening");
+  } finally {
+    processingCommand = false;
+  }
 }
