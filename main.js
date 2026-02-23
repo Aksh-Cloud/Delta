@@ -81,7 +81,7 @@ let VOICE = null;
 
 class DeltaEngine {
     constructor() {
-        this.worker = new Worker("deltaengine.js");
+        this.worker = new Worker("./DeltaEngine.js");
         this.moves = [];
 
         this.worker.postMessage("uci");
@@ -1026,3 +1026,4 @@ async function askDelta(text) {
     processingCommand = false;
   }
 }
+
