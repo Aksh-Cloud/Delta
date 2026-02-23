@@ -41,7 +41,6 @@ let lastHeardTime = Date.now();
 let processingCommand = false; // prevent duplicate command handling
 let preferredVoiceName = null;
 const TARGET_VOICE_NAME = "Microsoft Mark - English";
-
 const logSpan = document.getElementById("moveText");
 const speakMoveBtn = document.getElementById("speakM");
 const game = new Chess();
@@ -365,8 +364,8 @@ function startListening() {
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = "en-UK";
+  recognition.interimResults = false;
+  recognition.lang = "en-GB";
   recognition.onresult = async (event) => {
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript
@@ -434,7 +433,7 @@ function startWakeWordListening() {
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = true;
+  recognition.interimResults = false;
   recognition.lang = "en-US";
 
   recognition.onresult = async (event) => {
@@ -1027,5 +1026,3 @@ async function askDelta(text) {
     processingCommand = false;
   }
 }
-
-
