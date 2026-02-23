@@ -364,66 +364,31 @@ function startListening() {
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  // enable interim results so mobile browsers can provide partial text
-  // and we can wait briefly for the full sentence before processing
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 3;
+  recognition.interimResults = false;
   recognition.lang = "en-GB";
+  recognition.onresult = async (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript
+        .toLowerCase()
+        .trim();
 
-  let silenceTimerLocal = null;
-  const SILENCE_MS = 1200; // increased silence window for Chrome mobile
-  let lastFull = '';
-  let lastProcessedTranscript = '';
-
-  const processTranscript = async (finalTranscript, isFinal = false) => {
-    if (!finalTranscript) return;
-    // only process when we know we have a final result (or onspeechend forced it)
-    if (!isFinal) return;
-
-    const t = finalTranscript.toLowerCase().trim();
-    // avoid duplicate processing
-    if (!t || t === lastProcessedTranscript) return;
-    lastProcessedTranscript = t;
-
-    console.log("User said (final):", t);
-
-    if (processingCommand) return;
-
-    if (listenMode === "command") {
-      try {
-        await askDelta(t);
-      } catch (err) {
-        console.error(err);
+      if (event.results[i].isFinal) {
+        console.log("User said:", transcript);
+        if (listenMode === "command") {
+            (async () => {
+              try {
+                await askDelta(transcript);
+              } catch (err) {
+                console.error(err);
+              } finally {
+                processingCommand = false;
+              }
+            })();
+            recognition.stop();
+            listeningForWake = false;
+        }
       }
-      try { recognition.stop(); } catch (e) {}
-      listeningForWake = false;
     }
-  };
-
-  recognition.onresult = (event) => {
-    // build a full text from all result segments (keep latest interim)
-    const results = Array.from(event.results);
-    const full = results.map(r => r[0].transcript).join(' ').trim();
-    const hasFinal = results.some(r => r.isFinal);
-
-    lastFull = full;
-
-    if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
-
-    // If a final segment exists, wait a short silence window for any trailing words
-    // otherwise wait a bit longer to collect more interim results
-    silenceTimerLocal = setTimeout(() => processTranscript(lastFull, hasFinal), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
-  };
-
-  // Better handling for Chrome mobile: use speechstart/stop events
-  recognition.onspeechstart = () => {
-    if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
-  };
-
-  recognition.onspeechend = () => {
-    if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
-    // give a short grace period for any trailing words; force final processing
-    silenceTimerLocal = setTimeout(() => processTranscript(lastFull, true), SILENCE_MS);
   };
 
   recognition.onerror = e => {
@@ -431,11 +396,11 @@ function startListening() {
   };
 
   recognition.onend = () => {
-    // auto-restart when appropriate
+    // auto-restart (important)
     try {
       if (listeningForWake) recognition.start();
     } catch (err) {
-      console.log("Speech restart failed", err);
+      console.log("SS");
     }
   };
 
@@ -534,10 +499,10 @@ function drawEye(cx, cy) {
   let radius = emotion === "angry" ? 6 : 18;
 
   let glow = 6;
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = "en-US";
+
+  // ----- BOOT PHASES -----
+  if (bootPhase === 0) return;
+
   if (bootPhase === 1) {
     // scan line
     height = 4;
@@ -574,9 +539,7 @@ function drawEye(cx, cy) {
   
   if (charging) mix = 0.4;
   else mix = wakeColor;
-      console.log('command recognizer ended');
-      listeningForWake = false;
-      recognition = null;
+
   let r = Math.round(lerp(base.r, charging ? chargeTint.r : wakeTint.r, mix));
   let g = Math.round(lerp(base.g, charging ? chargeTint.g : wakeTint.g, mix));
   let b = Math.round(lerp(base.b, charging ? chargeTint.b : wakeTint.b, mix));
