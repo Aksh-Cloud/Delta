@@ -371,7 +371,8 @@ function startListening() {
   recognition.lang = "en-GB";
 
   let silenceTimerLocal = null;
-  const SILENCE_MS = 800; // short silence window to collect remaining speech
+  const SILENCE_MS = 1200; // increased silence window for Chrome mobile
+  let lastFull = '';
 
   const processTranscript = async (finalTranscript) => {
     if (!finalTranscript) return;
@@ -391,20 +392,29 @@ function startListening() {
   };
 
   recognition.onresult = (event) => {
-    // build a full text from all result segments
-    let full = '';
-    let hasFinal = false;
-    for (let i = 0; i < event.results.length; i++) {
-      full += event.results[i][0].transcript + (event.results[i].isFinal ? '' : ' ');
-      if (event.results[i].isFinal) hasFinal = true;
-    }
-    full = full.trim();
+    // build a full text from all result segments (keep latest interim)
+    const results = Array.from(event.results);
+    const full = results.map(r => r[0].transcript).join(' ').trim();
+    const hasFinal = results.some(r => r.isFinal);
+
+    lastFull = full;
 
     if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
 
     // If a final segment exists, wait a short silence window for any trailing words
     // otherwise wait a bit longer to collect more interim results
-    silenceTimerLocal = setTimeout(() => processTranscript(full), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
+    silenceTimerLocal = setTimeout(() => processTranscript(lastFull), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
+  };
+
+  // Better handling for Chrome mobile: use speechstart/stop events
+  recognition.onspeechstart = () => {
+    if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
+  };
+
+  recognition.onspeechend = () => {
+    if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
+    // give a short grace period for any trailing words
+    silenceTimerLocal = setTimeout(() => processTranscript(lastFull), SILENCE_MS);
   };
 
   recognition.onerror = e => {
