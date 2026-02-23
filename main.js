@@ -1002,7 +1002,7 @@ speakMoveBtn.onclick = () => {
 }
 
 async function askDelta(text) {
-  if (processingCommand) return;
+  //if (processingCommand) return;
   processingCommand = true;
   try {
     document.getElementById("userText").innerText =
@@ -1027,4 +1027,5 @@ async function askDelta(text) {
     processingCommand = false;
   }
 }
+
 
