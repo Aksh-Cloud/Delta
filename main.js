@@ -362,71 +362,38 @@ function startListening() {
     return;
   }
 
-  // Use a single-shot recognizer when in command mode to avoid duplicate
-  // finalization events on mobile Chrome. For wake-word listening keep
-  // continuous + interimResults behavior.
-  if (listenMode === "command") {
-    const cmdRec = new SpeechRecognition();
-    cmdRec.continuous = false;
-    cmdRec.interimResults = false;
-    cmdRec.maxAlternatives = 3;
-    cmdRec.lang = "en-GB";
-
-    cmdRec.onresult = async (event) => {
-      const text = Array.from(event.results).map(r => r[0].transcript).join(' ').trim().toLowerCase();
-      if (!text) return;
-      // prevent double-processing
-      if (processingCommand) return;
-      processingCommand = true;
-      try {
-        await askDelta(text);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        processingCommand = false;
-      }
-    };
-
-    cmdRec.onerror = (e) => {
-      console.warn('Command recognition error:', e.error);
-    };
-
-    cmdRec.onend = () => {
-      // when command recognizer ends, ensure we aren't left thinking we're listening
-      listeningForWake = false;
-    };
-
-    try { cmdRec.start(); } catch (err) { console.warn('cmdRec.start() failed', err); }
-    return;
-  }
-
-  // WAKE listening (continuous with interim results)
   recognition = new SpeechRecognition();
   recognition.continuous = true;
+  // enable interim results so mobile browsers can provide partial text
+  // and we can wait briefly for the full sentence before processing
   recognition.interimResults = true;
   recognition.maxAlternatives = 3;
   recognition.lang = "en-GB";
 
   let silenceTimerLocal = null;
-  const SILENCE_MS = 1200; // grace period for trailing words
+  const SILENCE_MS = 1200; // increased silence window for Chrome mobile
   let lastFull = '';
   let lastProcessedTranscript = '';
 
   const processTranscript = async (finalTranscript, isFinal = false) => {
     if (!finalTranscript) return;
-    if (!isFinal) return; // only handle finals in wake flow
+    // only process when we know we have a final result (or onspeechend forced it)
+    if (!isFinal) return;
+
     const t = finalTranscript.toLowerCase().trim();
+    // avoid duplicate processing
     if (!t || t === lastProcessedTranscript) return;
     lastProcessedTranscript = t;
+
+    console.log("User said (final):", t);
+
     if (processingCommand) return;
+
     if (listenMode === "command") {
-      processingCommand = true;
       try {
         await askDelta(t);
       } catch (err) {
         console.error(err);
-      } finally {
-        processingCommand = false;
       }
       try { recognition.stop(); } catch (e) {}
       listeningForWake = false;
@@ -434,20 +401,28 @@ function startListening() {
   };
 
   recognition.onresult = (event) => {
+    // build a full text from all result segments (keep latest interim)
     const results = Array.from(event.results);
     const full = results.map(r => r[0].transcript).join(' ').trim();
     const hasFinal = results.some(r => r.isFinal);
+
     lastFull = full;
+
     if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
+
+    // If a final segment exists, wait a short silence window for any trailing words
+    // otherwise wait a bit longer to collect more interim results
     silenceTimerLocal = setTimeout(() => processTranscript(lastFull, hasFinal), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
   };
 
+  // Better handling for Chrome mobile: use speechstart/stop events
   recognition.onspeechstart = () => {
     if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
   };
 
   recognition.onspeechend = () => {
     if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
+    // give a short grace period for any trailing words; force final processing
     silenceTimerLocal = setTimeout(() => processTranscript(lastFull, true), SILENCE_MS);
   };
 
@@ -456,6 +431,7 @@ function startListening() {
   };
 
   recognition.onend = () => {
+    // auto-restart when appropriate
     try {
       if (listeningForWake) recognition.start();
     } catch (err) {
