@@ -364,31 +364,47 @@ function startListening() {
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = false;
+  // enable interim results so mobile browsers can provide partial text
+  // and we can wait briefly for the full sentence before processing
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 3;
   recognition.lang = "en-GB";
-  recognition.onresult = async (event) => {
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript
-        .toLowerCase()
-        .trim();
 
-      if (event.results[i].isFinal) {
-        console.log("User said:", transcript);
-        if (listenMode === "command") {
-            (async () => {
-              try {
-                await askDelta(transcript);
-              } catch (err) {
-                console.error(err);
-              } finally {
-                processingCommand = false;
-              }
-            })();
-            recognition.stop();
-            listeningForWake = false;
-        }
+  let silenceTimerLocal = null;
+  const SILENCE_MS = 800; // short silence window to collect remaining speech
+
+  const processTranscript = async (finalTranscript) => {
+    if (!finalTranscript) return;
+    const t = finalTranscript.toLowerCase().trim();
+    console.log("User said (final):", t);
+    if (listenMode === "command") {
+      try {
+        await askDelta(t);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        processingCommand = false;
       }
+      try { recognition.stop(); } catch (e) {}
+      listeningForWake = false;
     }
+  };
+
+  recognition.onresult = (event) => {
+    // build a full text from all result segments
+    let full = '';
+    let hasFinal = false;
+    for (let i = 0; i < event.results.length; i++) {
+      full += event.results[i][0].transcript + (event.results[i].isFinal ? '' : ' ');
+      if (event.results[i].isFinal) hasFinal = true;
+    }
+    full = full.trim();
+
+    if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
+
+    // If a final segment exists, wait a short silence window for any trailing words
+    // otherwise wait a bit longer to collect more interim results
+    silenceTimerLocal = setTimeout(() => processTranscript(full), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
   };
 
   recognition.onerror = e => {
@@ -396,11 +412,11 @@ function startListening() {
   };
 
   recognition.onend = () => {
-    // auto-restart (important)
+    // auto-restart when appropriate
     try {
       if (listeningForWake) recognition.start();
     } catch (err) {
-      console.log("SS");
+      console.log("Speech restart failed", err);
     }
   };
 
