@@ -373,18 +373,27 @@ function startListening() {
   let silenceTimerLocal = null;
   const SILENCE_MS = 1200; // increased silence window for Chrome mobile
   let lastFull = '';
+  let lastProcessedTranscript = '';
 
-  const processTranscript = async (finalTranscript) => {
+  const processTranscript = async (finalTranscript, isFinal = false) => {
     if (!finalTranscript) return;
+    // only process when we know we have a final result (or onspeechend forced it)
+    if (!isFinal) return;
+
     const t = finalTranscript.toLowerCase().trim();
+    // avoid duplicate processing
+    if (!t || t === lastProcessedTranscript) return;
+    lastProcessedTranscript = t;
+
     console.log("User said (final):", t);
+
+    if (processingCommand) return;
+
     if (listenMode === "command") {
       try {
         await askDelta(t);
       } catch (err) {
         console.error(err);
-      } finally {
-        processingCommand = false;
       }
       try { recognition.stop(); } catch (e) {}
       listeningForWake = false;
@@ -403,7 +412,7 @@ function startListening() {
 
     // If a final segment exists, wait a short silence window for any trailing words
     // otherwise wait a bit longer to collect more interim results
-    silenceTimerLocal = setTimeout(() => processTranscript(lastFull), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
+    silenceTimerLocal = setTimeout(() => processTranscript(lastFull, hasFinal), hasFinal ? SILENCE_MS : SILENCE_MS * 2);
   };
 
   // Better handling for Chrome mobile: use speechstart/stop events
@@ -413,8 +422,8 @@ function startListening() {
 
   recognition.onspeechend = () => {
     if (silenceTimerLocal) clearTimeout(silenceTimerLocal);
-    // give a short grace period for any trailing words
-    silenceTimerLocal = setTimeout(() => processTranscript(lastFull), SILENCE_MS);
+    // give a short grace period for any trailing words; force final processing
+    silenceTimerLocal = setTimeout(() => processTranscript(lastFull, true), SILENCE_MS);
   };
 
   recognition.onerror = e => {
