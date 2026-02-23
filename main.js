@@ -534,10 +534,10 @@ function drawEye(cx, cy) {
   let radius = emotion === "angry" ? 6 : 18;
 
   let glow = 6;
-
-  // ----- BOOT PHASES -----
-  if (bootPhase === 0) return;
-
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
   if (bootPhase === 1) {
     // scan line
     height = 4;
@@ -574,7 +574,9 @@ function drawEye(cx, cy) {
   
   if (charging) mix = 0.4;
   else mix = wakeColor;
-
+      console.log('command recognizer ended');
+      listeningForWake = false;
+      recognition = null;
   let r = Math.round(lerp(base.r, charging ? chargeTint.r : wakeTint.r, mix));
   let g = Math.round(lerp(base.g, charging ? chargeTint.g : wakeTint.g, mix));
   let b = Math.round(lerp(base.b, charging ? chargeTint.b : wakeTint.b, mix));
