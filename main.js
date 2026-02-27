@@ -46,7 +46,7 @@ const speakMoveBtn = document.getElementById("speakM");
 const game = new Chess();
 
 
-const SILENCE_DELAY = 12000; // 12 seconds
+const SILENCE_DELAY = 6000; // 6 seconds
 
 const refresh = document.getElementById('refresh');
 
@@ -1026,4 +1026,5 @@ async function askDelta(text) {
     processingCommand = false;
   }
 }
+
 
